@@ -1,0 +1,15 @@
+{
+  "name": "copilot-gpt-implementation",
+  "description": "Full-Stack ChatGPT-like App on AWS with Pulumi (TypeScript)",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "dependencies": {
+    "@pulumi/pulumi": "*",
+    "@pulumi/aws": "6.13.3",
+    "aws-sdk": "*",
+    "https": "*"
+  }
+}
