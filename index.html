@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Clone</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f7f7f8;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #10a37f;
+            text-align: center;
+        }
+        .chat-container {
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            height: 400px;
+            padding: 20px;
+            margin: 20px 0;
+            overflow-y: auto;
+            background: #f9f9f9;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #10a37f;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0d8c6c;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .user {
+            background: #e3f2fd;
+            text-align: right;
+        }
+        .assistant {
+            background: #f1f8e9;
+        }
+        .auth-section {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .auth-button {
+            background: #4285f4;
+            margin: 10px;
+        }
+        .auth-button:hover {
+            background: #3367d6;
+        }
+        .notification-banner {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .notification-banner.show {
+            opacity: 1;
+        }
+        .notification-banner.error {
+            background: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <!-- Notification Banner -->
+    <div id="notificationBanner" class="notification-banner"></div>
+    
+    <div class="container">
+        <h1>ChatGPT Clone</h1>
+        
+        <div class="auth-section" id="authSection">
+            <p>Please sign in to start chatting:</p>
+            <button class="auth-button" onclick="signInWithGoogle()">Sign in with Google</button>
+            <button onclick="signInWithEmail()">Sign in with Email</button>
+        </div>
+
+        <div id="chatSection" style="display: none;">
+            <div class="chat-container" id="chatContainer">
+                <div class="message assistant">
+                    <strong>Assistant:</strong> Hello! I'm your AI assistant. How can I help you today?
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <input type="text" id="messageInput" placeholder="Type your message here..." onkeypress="handleKeyPress(event)">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="resetChatHistory()" style="background: #ffc107; color: #000; margin-right: 10px;">Reset Chat History</button>
+                <button onclick="signOut()" style="background: #dc3545;">Sign Out</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration from Pulumi outputs
+        const CONFIG = {
+            apiEndpoint: 'https://kj06u4t2m1.execute-api.us-west-2.amazonaws.com',
+            cognitoUserPoolId: 'us-west-2_DV2Bceg5e',
+            cognitoClientId: '21ie3fg46q35u2foudd77f0qmv',
+            cognitoDomain: 'https://chatgpt-userpool-oha32w4z22i.auth.us-west-2.amazoncognito.com'
+        };
+
+        let currentUser = null;
+
+        function signInWithGoogle() {
+            const redirectUri = encodeURIComponent(window.location.origin);
+            const googleAuthUrl = `${CONFIG.cognitoDomain}/oauth2/authorize?` +
+                `client_id=${CONFIG.cognitoClientId}&` +
+                `response_type=code&` +
+                `scope=openid+email+profile&` +
+                `redirect_uri=${redirectUri}&` +
+                `identity_provider=Google`;
+            
+            window.location.href = googleAuthUrl;
+        }
+
+        function signInWithEmail() {
+            alert('Email sign-in not implemented yet. Please use Google sign-in.');
+        }
+
+        function signOut() {
+            currentUser = null;
+            document.getElementById('authSection').style.display = 'block';
+            document.getElementById('chatSection').style.display = 'none';
+            
+            // Clear chat
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '<div class="message assistant"><strong>Assistant:</strong> Hello! I\'m your AI assistant. How can I help you today?</div>';
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessageToChat('user', message);
+            input.value = '';
+            
+            try {
+                // Call backend API
+                const response = await fetch(CONFIG.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        userId: currentUser?.sub || 'anonymous'
+                    })
+                });
+                
+                const data = await response.json();
+                addMessageToChat('assistant', data.message || 'Sorry, I encountered an error processing your request.');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessageToChat('assistant', 'Sorry, I encountered an error processing your request.');
+            }
+        }
+
+        function addMessageToChat(sender, message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.innerHTML = `<strong>${sender === 'user' ? 'You' : 'Assistant'}:</strong> ${message}`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function showNotification(message, isError = false) {
+            const banner = document.getElementById('notificationBanner');
+            banner.textContent = message;
+            banner.className = `notification-banner${isError ? ' error' : ''}`;
+            
+            // Show the banner
+            setTimeout(() => {
+                banner.classList.add('show');
+            }, 100);
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                banner.classList.remove('show');
+            }, 3000);
+        }
+
+        async function resetChatHistory() {
+            if (!confirm('Are you sure you want to delete all chat history? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(CONFIG.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'reset',
+                        userId: currentUser?.sub || 'anonymous'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Clear the chat display and reload fresh history (which will include welcome message)
+                    loadChatHistory();
+                    showNotification('Chat history has been reset successfully');
+                } else {
+                    showNotification('Sorry, couldn\'t reset the chat history. Please try again.', true);
+                }
+                
+            } catch (error) {
+                console.error('Error resetting chat:', error);
+                showNotification('Sorry, I encountered an error resetting the chat history.', true);
+            }
+        }
+
+        async function loadChatHistory() {
+            try {
+                const response = await fetch(CONFIG.apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'getHistory',
+                        userId: currentUser?.sub || 'anonymous'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.history && data.history.length > 0) {
+                    const chatContainer = document.getElementById('chatContainer');
+                    chatContainer.innerHTML = ''; // Clear default message
+                    
+                    // Display each conversation
+                    data.history.forEach(item => {
+                        // Only show user message if it's not empty (skip welcome message user part)
+                        if (item.userMessage && item.userMessage.trim()) {
+                            addMessageToChat('user', item.userMessage);
+                        }
+                        // Always show assistant message
+                        addMessageToChat('assistant', item.assistantMessage);
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Error loading chat history:', error);
+            }
+        }
+
+        // Check for authentication callback
+        function checkAuthCallback() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const code = urlParams.get('code');
+            
+            if (code) {
+                // In a real implementation, you'd exchange the code for tokens
+                // For now, we'll simulate a successful login
+                currentUser = { sub: 'user123', email: 'user@example.com' };
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('chatSection').style.display = 'block';
+                
+                // Load chat history after showing chat section
+                loadChatHistory();
+                
+                // Clean up URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+        }
+
+        // Initialize
+        checkAuthCallback();
+    </script>
+</body>
+</html>
